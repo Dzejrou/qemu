@@ -16,6 +16,7 @@ obj-$(CONFIG_TUSB6010) += tusb6010.o
 # emulated usb devices
 common-obj-$(CONFIG_USB) += dev-hub.o
 common-obj-$(CONFIG_USB) += dev-hid.o
+common-obj-$(CONFIG_USB) += dev-tmon.o
 common-obj-$(CONFIG_USB_TABLET_WACOM) += dev-wacom.o
 common-obj-$(CONFIG_USB_STORAGE_BOT)  += dev-storage.o
 common-obj-$(CONFIG_USB_STORAGE_UAS)  += dev-uas.o
