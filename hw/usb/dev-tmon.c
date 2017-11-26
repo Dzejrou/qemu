@@ -7,6 +7,8 @@
 #include "qemu/timer.h"
 #include "hw/input/hid.h"
 
+#define DIAGNOSTIC_DEVICE_CLASS 0xDC
+
 typedef struct USBTMonState
 {
 	USBDevice dev;
@@ -21,7 +23,7 @@ typedef struct USBTMonState
 static void report(USBTMonState *state)
 {
 	printf("============\n");
-	printf("TMON Report");
+	printf("TMON Report\n");
 	printf("| bw_int_in:   %lu\n", state->bw_int_in);
 	printf("| bw_int_out:  %lu\n", state->bw_int_out);
 	printf("| bw_bulk_in:  %lu\n", state->bw_bulk_in);
@@ -134,16 +136,27 @@ static void usb_tmon_handle_reset(USBDevice *dev)
 static const USBDescIface desc_iface_tmon = {
 	.bInterfaceNumber = 0,
 	.bNumEndpoints = 6,
-	.bInterfaceClass = USB_CLASS_APP_SPEC,
+	.bInterfaceClass = DIAGNOSTIC_DEVICE_CLASS,
 	.bInterfaceSubClass = USB_SUBCLASS_UNDEFINED,
 	.bInterfaceProtocol = 0x01,
 	.ndesc = 1,
 	.descs = (USBDescOther[]) {
 		{ // NO FUCKING IDEA...
 			.data = (uint8_t[]) {
-				0x03,
-				USB_DT_DEVICE,
-				USB_CLASS_APP_SPEC,
+				0x12,                    /* bLength */
+				0x01,                    /* bDescriptorType */
+				0x03, 0x00,              /* bcdUSB */
+				DIAGNOSTIC_DEVICE_CLASS, /* bDeviceClass */
+				0x00,                    /* bDeviceSubClass */
+				0x00,                    /* bDeviceProtocol */
+				0x09,                    /* bMaxPacketSize */
+				0x13, 0x37,              /* idVendor */
+				0x13, 0x37,              /* idProduct */
+				0x13, 0x37,              /* bcdDevice*/
+				0x01,                    /* iManufacturer */
+				0x02,                    /* iProduct */
+				0x03,                    /* iSerialNumber */
+				0x01                     /* bNumConfigurations */
 			},
 		},
 	},
