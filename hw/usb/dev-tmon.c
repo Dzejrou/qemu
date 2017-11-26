@@ -7,6 +7,30 @@
 #include "qemu/timer.h"
 #include "hw/input/hid.h"
 
+typedef struct USBTMonState
+{
+	USBDevice dev;
+	uint64_t bw_int_in;
+	uint64_t bw_int_out;
+	uint64_t bw_bulk_in;
+	uint64_t bw_bulk_out;
+	uint64_t bw_isoc_in;
+	uint64_t bw_isoc_out;
+} USBTMonState;
+
+static void report(USBTMonState *state)
+{
+	printf("============\n");
+	printf("TMON Report");
+	printf("| bw_int_in:   %lu\n", state->bw_int_in);
+	printf("| bw_int_out:  %lu\n", state->bw_int_out);
+	printf("| bw_bulk_in:  %lu\n", state->bw_bulk_in);
+	printf("| bw_bulk_out: %lu\n", state->bw_bulk_out);
+	printf("| bw_isoc_in:  %lu\n", state->bw_isoc_in);
+	printf("| bw_isoc_out: %lu\n", state->bw_isoc_out);
+	printf("============\n");
+}
+
 enum {
 	STR_MANUFACTURER = 1,
 	STR_PRODUCT_TMON,
@@ -24,13 +48,82 @@ static const USBDescStrings desc_strings = {
 static void usb_tmon_handle_control(USBDevice *dev, USBPacket *p,
                int request, int value, int index, int length, uint8_t *data)
 {
-	printf("HANDLE_CONTROL\n");
+	report((USBTMonState *)dev);
+}
+
+// TODO: p->actual_length vs p->iov.size
+static void usb_tmon_int_in(USBDevice *dev, USBPacket *p)
+{
+	USBTMonState* state = (USBTMonState *)dev;
+	state->bw_int_in += p->actual_length;
+}
+
+static void usb_tmon_int_out(USBDevice *dev, USBPacket *p)
+{
+	USBTMonState* state = (USBTMonState *)dev;
+	state->bw_int_out += p->actual_length;
+}
+
+static void usb_tmon_bulk_in(USBDevice *dev, USBPacket *p)
+{
+	USBTMonState* state = (USBTMonState *)dev;
+	state->bw_bulk_in += p->actual_length;
+}
+
+static void usb_tmon_bulk_out(USBDevice *dev, USBPacket *p)
+{
+	USBTMonState* state = (USBTMonState *)dev;
+	state->bw_bulk_out += p->actual_length;
+}
+
+static void usb_tmon_isoc_in(USBDevice *dev, USBPacket *p)
+{
+	USBTMonState* state = (USBTMonState *)dev;
+	state->bw_isoc_in += p->actual_length;
+}
+
+static void usb_tmon_isoc_out(USBDevice *dev, USBPacket *p)
+{
+	USBTMonState* state = (USBTMonState *)dev;
+	state->bw_isoc_out += p->actual_length;
 }
 
 static void usb_tmon_handle_data(USBDevice *dev, USBPacket *p)
 {
 	// Note: This is both bulk and isoc.
 	printf("HANDLE DATA\n");
+
+	switch (p->pid)
+	{
+		case USB_TOKEN_IN:
+			switch (p->ep->nr)
+			{
+				case 1:
+					usb_tmon_int_in(dev, p);
+					break;
+				case 3:
+					usb_tmon_bulk_in(dev, p);
+					break;
+				case 5:
+					usb_tmon_isoc_in(dev, p);
+					break;
+			}
+			break;
+		case USB_TOKEN_OUT:
+			switch (p->ep->nr)
+			{
+				case 2:
+					usb_tmon_int_out(dev, p);
+					break;
+				case 4:
+					usb_tmon_bulk_out(dev, p);
+					break;
+				case 6:
+					usb_tmon_isoc_out(dev, p);
+					break;
+			}
+			break;
+	}
 }
 
 static void usb_tmon_handle_reset(USBDevice *dev)
@@ -132,12 +225,36 @@ static void usb_tmon_realize(USBDevice *dev, Error **errp)
 	dev->speedmask = USB_SPEED_MASK_SUPER
 		| USB_SPEED_MASK_FULL
 		| USB_SPEED_MASK_HIGH;
+
+	USBTMonState *state = (USBTMonState *)dev;
+	state->bw_int_in = 0;
+	state->bw_int_out = 0;
+	state->bw_bulk_in = 0;
+	state->bw_bulk_out = 0;
+	state->bw_isoc_in = 0;
+	state->bw_isoc_out = 0;
 }
 
 static void usb_tmon_handle_attach(USBDevice *dev)
 {
 	printf("TMON ATTACHED\n");
 }
+
+static const VMStateDescription vmstate_usb_tmon = {
+    .name = "usb-tmon",
+    .version_id = 1,
+    .minimum_version_id = 1,
+    .fields = (VMStateField[]) {
+        VMSTATE_USB_DEVICE(dev, USBTMonState),
+        VMSTATE_UINT64(bw_int_in, USBTMonState),
+        VMSTATE_UINT64(bw_int_out, USBTMonState),
+        VMSTATE_UINT64(bw_bulk_in, USBTMonState),
+        VMSTATE_UINT64(bw_bulk_out, USBTMonState),
+        VMSTATE_UINT64(bw_isoc_in, USBTMonState),
+        VMSTATE_UINT64(bw_isoc_out, USBTMonState),
+        VMSTATE_END_OF_LIST()
+    }
+};
 
 static void usb_tmon_class_init(ObjectClass *klass, void *data)
 {
@@ -155,11 +272,13 @@ static void usb_tmon_class_init(ObjectClass *klass, void *data)
 	uc->handle_reset = usb_tmon_handle_reset;
 
 	set_bit(DEVICE_CATEGORY_USB, dc->categories);
+	dc->vmsd = &vmstate_usb_tmon;
 }
 
 static const TypeInfo usb_tmon_info = {
 	.name = "usb-tmon",
 	.parent = TYPE_USB_DEVICE,
+	.instance_size = sizeof(USBTMonState),
 	.class_init = usb_tmon_class_init
 };
 
