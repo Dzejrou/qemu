@@ -7,30 +7,45 @@
 #include "qemu/timer.h"
 #include "hw/input/hid.h"
 
+#include <sys/time.h>
+
 #define DIAGNOSTIC_DEVICE_CLASS 0xDC
+
+typedef enum
+{
+	TRANSFER_CONTROL,
+	TRANSFER_INT,
+	TRANSFER_BULK,
+	TRANSFER_ISOC,
+	TRANSFER_NONE
+} ttype_t;
 
 typedef struct USBTMonState
 {
 	USBDevice dev;
-	uint64_t bw_int_in;
-	uint64_t bw_int_out;
-	uint64_t bw_bulk_in;
-	uint64_t bw_bulk_out;
-	uint64_t bw_isoc_in;
-	uint64_t bw_isoc_out;
+
+	uint64_t data_in;
+	uint64_t data_out;
+	long time_in;
+	long time_out;
+
+	ttype_t transfer_type;
 } USBTMonState;
 
-static void report(USBTMonState *state)
+static long get_now_sec(void)
 {
-	printf("============\n");
-	printf("TMON Report\n");
-	printf("| bw_int_in:   %lu\n", state->bw_int_in);
-	printf("| bw_int_out:  %lu\n", state->bw_int_out);
-	printf("| bw_bulk_in:  %lu\n", state->bw_bulk_in);
-	printf("| bw_bulk_out: %lu\n", state->bw_bulk_out);
-	printf("| bw_isoc_in:  %lu\n", state->bw_isoc_in);
-	printf("| bw_isoc_out: %lu\n", state->bw_isoc_out);
-	printf("============\n");
+	struct timeval tv;
+	gettimeofday(&tv, NULL);
+
+	return (long)tv.tv_sec;
+}
+
+static long get_now_usec(void)
+{
+	struct timeval tv;
+	gettimeofday(&tv, NULL);
+
+	return (long)tv.tv_sec * 1000 + (long)tv.tv_usec;
 }
 
 enum {
@@ -50,50 +65,94 @@ static const USBDescStrings desc_strings = {
 static void usb_tmon_handle_control(USBDevice *dev, USBPacket *p,
                int request, int value, int index, int length, uint8_t *data)
 {
-	report((USBTMonState *)dev);
+	// TODO: Control?
 }
 
-// TODO: p->actual_length vs p->iov.size
 static void usb_tmon_int_in(USBDevice *dev, USBPacket *p)
 {
 	USBTMonState* state = (USBTMonState *)dev;
-	state->bw_int_in += p->actual_length;
+
+	if (state->time_in == 0 || state->transfer_type != TRANSFER_INT)
+	{
+		state->data_in = 0;
+		state->time_in = get_now_usec();
+		state->transfer_type = TRANSFER_INT;
+	}
+	else
+	{
+		long now = get_now_usec();
+		printf("[INT][IN] Packet received after %ld usecs.", (now - state->time_in));
+		state->time_in = now;
+	}
 }
 
 static void usb_tmon_int_out(USBDevice *dev, USBPacket *p)
 {
 	USBTMonState* state = (USBTMonState *)dev;
-	state->bw_int_out += p->actual_length;
+
+	if (state->time_out == 0 || state->transfer_type != TRANSFER_INT)
+	{
+		state->data_out = 0;
+		state->time_out = get_now_usec();
+		state->transfer_type = TRANSFER_INT;
+	}
+	else
+	{
+		long now = get_now_usec();
+		printf("[INT][OUT] Packet received after %ld usecs.", (now - state->time_out));
+		state->time_out = now;
+	}
 }
 
 static void usb_tmon_bulk_in(USBDevice *dev, USBPacket *p)
 {
 	USBTMonState* state = (USBTMonState *)dev;
-	state->bw_bulk_in += p->actual_length;
+
+	if (state->time_in == 0 || state->transfer_type != TRANSFER_BULK)
+	{
+		state->data_in = 0;
+		state->time_in = get_now_sec();
+		state->transfer_type = TRANSFER_BULK;
+	}
+	else if (state->time_in != get_now_sec())
+	{
+		printf("[BULK][IN] Transferred %ld bytes in the last second.", state->data_in);
+		state->data_in = 0;
+		state->time_in = get_now_usec();
+	}
 }
 
 static void usb_tmon_bulk_out(USBDevice *dev, USBPacket *p)
 {
 	USBTMonState* state = (USBTMonState *)dev;
-	state->bw_bulk_out += p->actual_length;
+
+	if (state->time_out == 0 || state->transfer_type != TRANSFER_BULK)
+	{
+		state->data_out = 0;
+		state->time_out = get_now_sec();
+		state->transfer_type = TRANSFER_BULK;
+	}
+	else if (state->time_out != get_now_sec())
+	{
+		printf("[BULK][OUT] Transferred %ld bytes in the last second.", state->data_out);
+		state->data_out = 0;
+		state->time_out = get_now_usec();
+	}
 }
 
 static void usb_tmon_isoc_in(USBDevice *dev, USBPacket *p)
 {
-	USBTMonState* state = (USBTMonState *)dev;
-	state->bw_isoc_in += p->actual_length;
+	/* USBTMonState* state = (USBTMonState *)dev; */
 }
 
 static void usb_tmon_isoc_out(USBDevice *dev, USBPacket *p)
 {
-	USBTMonState* state = (USBTMonState *)dev;
-	state->bw_isoc_out += p->actual_length;
+	/* USBTMonState* state = (USBTMonState *)dev; */
 }
 
 static void usb_tmon_handle_data(USBDevice *dev, USBPacket *p)
 {
-	// Note: This is both bulk and isoc.
-	printf("HANDLE DATA\n");
+	USBTMonState* state = (USBTMonState *)dev;
 
 	switch (p->pid)
 	{
@@ -110,6 +169,8 @@ static void usb_tmon_handle_data(USBDevice *dev, USBPacket *p)
 					usb_tmon_isoc_in(dev, p);
 					break;
 			}
+
+			state->data_in += p->actual_length;
 			break;
 		case USB_TOKEN_OUT:
 			switch (p->ep->nr)
@@ -124,13 +185,15 @@ static void usb_tmon_handle_data(USBDevice *dev, USBPacket *p)
 					usb_tmon_isoc_out(dev, p);
 					break;
 			}
+
+			state->data_out += p->actual_length;
 			break;
 	}
 }
 
 static void usb_tmon_handle_reset(USBDevice *dev)
 {
-	printf("HANDLE RESET\n");
+	// TODO: Reset?
 }
 
 static const USBDescIface desc_iface_tmon = {
@@ -240,12 +303,10 @@ static void usb_tmon_realize(USBDevice *dev, Error **errp)
 		| USB_SPEED_MASK_HIGH;
 
 	USBTMonState *state = (USBTMonState *)dev;
-	state->bw_int_in = 0;
-	state->bw_int_out = 0;
-	state->bw_bulk_in = 0;
-	state->bw_bulk_out = 0;
-	state->bw_isoc_in = 0;
-	state->bw_isoc_out = 0;
+	state->data_in = 0;
+	state->data_out = 0;
+	state->time_in = 0;
+	state->time_out = 0;
 }
 
 static void usb_tmon_handle_attach(USBDevice *dev)
@@ -259,19 +320,16 @@ static const VMStateDescription vmstate_usb_tmon = {
     .minimum_version_id = 1,
     .fields = (VMStateField[]) {
         VMSTATE_USB_DEVICE(dev, USBTMonState),
-        VMSTATE_UINT64(bw_int_in, USBTMonState),
-        VMSTATE_UINT64(bw_int_out, USBTMonState),
-        VMSTATE_UINT64(bw_bulk_in, USBTMonState),
-        VMSTATE_UINT64(bw_bulk_out, USBTMonState),
-        VMSTATE_UINT64(bw_isoc_in, USBTMonState),
-        VMSTATE_UINT64(bw_isoc_out, USBTMonState),
+        VMSTATE_UINT64(data_in, USBTMonState),
+        VMSTATE_UINT64(data_out, USBTMonState),
+        VMSTATE_INT64(time_in, USBTMonState),
+        VMSTATE_INT64(time_out, USBTMonState),
         VMSTATE_END_OF_LIST()
     }
 };
 
 static void usb_tmon_class_init(ObjectClass *klass, void *data)
 {
-	printf("TMON IS HERE, BABY!\n");
 	DeviceClass *dc = DEVICE_CLASS(klass);
 	USBDeviceClass *uc = USB_DEVICE_CLASS(klass);
 	(void)dc;
