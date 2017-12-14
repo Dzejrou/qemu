@@ -62,6 +62,15 @@ static const USBDescStrings desc_strings = {
 	[STR_CONFIG_TMON]  = "Transfer Monitor"
 };
 
+static void usb_tmon_repl(USBPacket *p, uint8_t data, uint32_t count)
+{
+	uint8_t *buf = (uint8_t *)malloc(count);
+	for (uint32_t i = 0; i < count; ++i)
+		buf[i] = data;
+	usb_packet_copy(p, (void *)buf, count);
+	free(buf);
+}
+
 static void usb_tmon_handle_control(USBDevice *dev, USBPacket *p,
                int request, int value, int index, int length, uint8_t *data)
 {
@@ -173,21 +182,34 @@ static void usb_tmon_handle_data(USBDevice *dev, USBPacket *p)
 			state->data_in += p->actual_length;
 			break;
 		case USB_TOKEN_OUT:
+		{
+			uint8_t data = 0;
+			uint32_t count = 0;
+
 			switch (p->ep->nr)
 			{
 				case 2:
 					usb_tmon_int_out(dev, p);
+					data = 1;
+					count = 4;
 					break;
 				case 4:
 					usb_tmon_bulk_out(dev, p);
+					data = 2;
+					count = 64;
 					break;
 				case 6:
 					usb_tmon_isoc_out(dev, p);
+					data = 3;
+					count = 4;
 					break;
 			}
 
-			state->data_out += p->actual_length;
+			usb_tmon_repl(p, data, count);
+
+			state->data_out += count;
 			break;
+		}
 	}
 }
 
