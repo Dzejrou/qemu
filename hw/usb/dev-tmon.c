@@ -71,10 +71,43 @@ static void usb_tmon_repl(USBPacket *p, uint8_t data, uint32_t count)
 	free(buf);
 }
 
+#define U16(x) ((x) & 0xff), (((x) >> 8) & 0xff)
+
+static uint8_t descriptor[] = {
+	0x12,                    /* bLength */
+	0x01,                    /* bDescriptorType */
+	U16(0x0300),             /* bcdUSB */
+	DIAGNOSTIC_DEVICE_CLASS, /* bDeviceClass */
+	0x00,                    /* bDeviceSubClass */
+	0x00,                    /* bDeviceProtocol */
+	0x09,                    /* bMaxPacketSize */
+	U16(0x1337),             /* idVendor */
+	U16(0x1337),             /* idProduct */
+	U16(0x1337),             /* bcdDevice*/
+	0x01,                    /* iManufacturer */
+	0x02,                    /* iProduct */
+	0x03,                    /* iSerialNumber */
+	0x01                     /* bNumConfigurations */
+};
+
 static void usb_tmon_handle_control(USBDevice *dev, USBPacket *p,
                int request, int value, int index, int length, uint8_t *data)
 {
-	// TODO: Control?
+	printf("length = %d | index = %d | value = %d | request = %d\n", length, index, value, request);
+	int rc = usb_desc_handle_control(dev, p, request, value, index, length, data);
+
+	if (rc >= 0)
+		return;
+	return;
+
+	if (request == 32774 && value == 256 && length == 18)
+	{
+		printf("Got descriptor request!\n");
+		memcpy(data, descriptor, sizeof(descriptor));
+		p->actual_length = sizeof(descriptor);
+	}
+	else
+		usb_desc_handle_control(dev, p, request, value, index, length, data);
 }
 
 static void usb_tmon_int_in(USBDevice *dev, USBPacket *p)
@@ -228,20 +261,15 @@ static const USBDescIface desc_iface_tmon = {
 	.descs = (USBDescOther[]) {
 		{ // NO FUCKING IDEA...
 			.data = (uint8_t[]) {
-				0x12,                    /* bLength */
-				0x01,                    /* bDescriptorType */
-				0x03, 0x00,              /* bcdUSB */
-				DIAGNOSTIC_DEVICE_CLASS, /* bDeviceClass */
-				0x00,                    /* bDeviceSubClass */
-				0x00,                    /* bDeviceProtocol */
-				0x09,                    /* bMaxPacketSize */
-				0x13, 0x37,              /* idVendor */
-				0x13, 0x37,              /* idProduct */
-				0x13, 0x37,              /* bcdDevice*/
-				0x01,                    /* iManufacturer */
-				0x02,                    /* iProduct */
-				0x03,                    /* iSerialNumber */
-				0x01                     /* bNumConfigurations */
+				0x09,                    /* bLength */
+				USB_DT_INTERFACE,        /* bDescriptorType */
+				0x00,                    /* bInterfaceNumber*/
+				0x00,                    /* bAlternateSetting */
+				0x06,                    /* bNumEndpoints */
+				DIAGNOSTIC_DEVICE_CLASS, /* bInterfaceClass */
+				USB_SUBCLASS_UNDEFINED,  /* bInterfaceSubClass */
+				0x01,                    /* bInterfaceProtocol */
+				0x00                     /* index */
 			},
 		},
 	},
@@ -281,16 +309,34 @@ static const USBDescIface desc_iface_tmon = {
 	},
 };
 
+/* static uint8_t bla[] = {*/
+/* 	0x12,                     bLength */
+/* 	0x01,                     bDescriptorType */
+/* 	U16(0x0300),              bcdUSB */
+/* 	DIAGNOSTIC_DEVICE_CLASS,  bDeviceClass */
+/* 	0x00,                     bDeviceSubClass */
+/* 	0x00,                     bDeviceProtocol */
+/* 	0x09,                     bMaxPacketSize */
+/* 	U16(0x1337),              idVendor */
+/* 	U16(0x1337),              idProduct */
+/* 	U16(0x1337),              bcdDevice*/
+/* 	0x01,                     iManufacturer */
+/* 	0x02,                     iProduct */
+/* 	0x03,                     iSerialNumber */
+/* 	0x01                      bNumConfigurations */
+/* };*/
+
 static const USBDescDevice desc_device_tmon = {
-    .bcdUSB                        = 0x0100,
-    .bMaxPacketSize0               = 8,
+    .bcdUSB                        = 0x0300,
+    .bMaxPacketSize0               = 9,
+    .bDeviceClass                  = DIAGNOSTIC_DEVICE_CLASS,
     .bNumConfigurations            = 1,
     .confs = (USBDescConfig[]) {
         {
             .bNumInterfaces        = 1,
             .bConfigurationValue   = 1,
             .iConfiguration        = STR_CONFIG_TMON,
-            .bmAttributes          = USB_CFG_ATT_ONE | USB_CFG_ATT_WAKEUP,
+            .bmAttributes          = USB_CFG_ATT_ONE,
             .bMaxPower             = 50,
             .nif = 1,
             .ifs = &desc_iface_tmon,
@@ -298,28 +344,26 @@ static const USBDescDevice desc_device_tmon = {
     },
 };
 
-static const USBDescMSOS desc_msos_suspend = {
-    .SelectiveSuspendEnabled = true,
-};
-
 static const USBDesc desc_tmon = {
     .id = {
         .idVendor          = 0x1337,
-        .idProduct         = 0x0042,
-        .bcdDevice         = 0,
+        .idProduct         = 0x1337,
+        .bcdDevice         = 0x1337,
         .iManufacturer     = STR_MANUFACTURER,
         .iProduct          = STR_PRODUCT_TMON,
         .iSerialNumber     = STR_SERIALNUMBER,
     },
+    .super = &desc_device_tmon,
     .full = &desc_device_tmon,
+    .high = &desc_device_tmon,
     .str = desc_strings,
-    .msos = &desc_msos_suspend,
 };
 
 static void usb_tmon_realize(USBDevice *dev, Error **errp)
 {
 	printf("TMON REALIZING!\n");
 	dev->usb_desc = &desc_tmon;
+	dev->device = desc_tmon.super;
 	dev->speedmask = USB_SPEED_MASK_SUPER
 		| USB_SPEED_MASK_FULL
 		| USB_SPEED_MASK_HIGH;
