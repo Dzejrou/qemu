@@ -11,6 +11,10 @@
 
 #define DIAGNOSTIC_DEVICE_CLASS 0xDC
 
+#define INT_PACKET_SIZE 1024
+#define BULK_PACKET_SIZE 1024
+#define ISOC_PACKET_SIZE 1024
+
 typedef enum
 {
 	TRANSFER_CONTROL,
@@ -224,17 +228,17 @@ static void usb_tmon_handle_data(USBDevice *dev, USBPacket *p)
 				case 2:
 					usb_tmon_int_out(dev, p);
 					data = 1;
-					count = 4;
+					count = INT_PACKET_SIZE;
 					break;
 				case 4:
 					usb_tmon_bulk_out(dev, p);
 					data = 2;
-					count = 64;
+					count = BULK_PACKET_SIZE;
 					break;
 				case 6:
 					usb_tmon_isoc_out(dev, p);
 					data = 3;
-					count = 4;
+					count = ISOC_PACKET_SIZE;
 					break;
 			}
 
@@ -277,34 +281,34 @@ static const USBDescIface desc_iface_tmon = {
 		{
 			.bEndpointAddress = USB_DIR_IN | 0x01,
 			.bmAttributes = USB_ENDPOINT_XFER_INT,
-			.wMaxPacketSize = 4,
+			.wMaxPacketSize = INT_PACKET_SIZE,
 			.bInterval = 7,
 		},
 		{
 			.bEndpointAddress = USB_DIR_OUT | 0x02,
 			.bmAttributes = USB_ENDPOINT_XFER_INT,
-			.wMaxPacketSize = 4,
+			.wMaxPacketSize = INT_PACKET_SIZE,
 			.bInterval = 7,
 		},
 		{
 			.bEndpointAddress = USB_DIR_IN | 0x03,
 			.bmAttributes = USB_ENDPOINT_XFER_BULK,
-			.wMaxPacketSize = 64,
+			.wMaxPacketSize = BULK_PACKET_SIZE,
 		},
 		{
 			.bEndpointAddress = USB_DIR_OUT | 0x04,
 			.bmAttributes = USB_ENDPOINT_XFER_BULK,
-			.wMaxPacketSize = 64,
+			.wMaxPacketSize = BULK_PACKET_SIZE,
 		},
 		{
 			.bEndpointAddress = USB_DIR_IN | 0x05,
 			.bmAttributes = USB_ENDPOINT_XFER_ISOC,
-			.wMaxPacketSize = 4,
+			.wMaxPacketSize = ISOC_PACKET_SIZE,
 		},
 		{
 			.bEndpointAddress = USB_DIR_OUT | 0x06,
 			.bmAttributes = USB_ENDPOINT_XFER_ISOC,
-			.wMaxPacketSize = 4,
+			.wMaxPacketSize = ISOC_PACKET_SIZE,
 		},
 	},
 };
