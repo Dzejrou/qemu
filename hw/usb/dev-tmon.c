@@ -11,9 +11,9 @@
 
 #define DIAGNOSTIC_DEVICE_CLASS 0xDC
 
-#define INT_PACKET_SIZE 1024
-#define BULK_PACKET_SIZE 1024
-#define ISOC_PACKET_SIZE 1024
+#define INT_PACKET_SIZE 512
+#define BULK_PACKET_SIZE 512
+#define ISOC_PACKET_SIZE 512
 
 typedef enum
 {
@@ -114,24 +114,6 @@ static void usb_tmon_handle_control(USBDevice *dev, USBPacket *p,
 		usb_desc_handle_control(dev, p, request, value, index, length, data);
 }
 
-static void usb_tmon_int_in(USBDevice *dev, USBPacket *p)
-{
-	USBTMonState* state = (USBTMonState *)dev;
-
-	if (state->time_in == 0 || state->transfer_type != TRANSFER_INT)
-	{
-		state->data_in = 0;
-		state->time_in = get_now_usec();
-		state->transfer_type = TRANSFER_INT;
-	}
-	else
-	{
-		long now = get_now_usec();
-		printf("[INT][IN] Packet received after %ld usecs.", (now - state->time_in));
-		state->time_in = now;
-	}
-}
-
 static void usb_tmon_int_out(USBDevice *dev, USBPacket *p)
 {
 	USBTMonState* state = (USBTMonState *)dev;
@@ -150,21 +132,21 @@ static void usb_tmon_int_out(USBDevice *dev, USBPacket *p)
 	}
 }
 
-static void usb_tmon_bulk_in(USBDevice *dev, USBPacket *p)
+static void usb_tmon_int_in(USBDevice *dev, USBPacket *p)
 {
 	USBTMonState* state = (USBTMonState *)dev;
 
-	if (state->time_in == 0 || state->transfer_type != TRANSFER_BULK)
+	if (state->time_in == 0 || state->transfer_type != TRANSFER_INT)
 	{
-		state->data_in = 0;
-		state->time_in = get_now_sec();
-		state->transfer_type = TRANSFER_BULK;
-	}
-	else if (state->time_in != get_now_sec())
-	{
-		printf("[BULK][IN] Transferred %ld bytes in the last second.", state->data_in);
 		state->data_in = 0;
 		state->time_in = get_now_usec();
+		state->transfer_type = TRANSFER_INT;
+	}
+	else
+	{
+		long now = get_now_usec();
+		printf("[INT][IN] Packet received after %ld usecs.\n", (now - state->time_in));
+		state->time_in = now;
 	}
 }
 
@@ -180,18 +162,36 @@ static void usb_tmon_bulk_out(USBDevice *dev, USBPacket *p)
 	}
 	else if (state->time_out != get_now_sec())
 	{
-		printf("[BULK][OUT] Transferred %ld bytes in the last second.", state->data_out);
+		printf("[BULK][OUT] Transferred %ld bytes out the last second.\n", state->data_out);
 		state->data_out = 0;
-		state->time_out = get_now_usec();
+		state->time_out = get_now_sec();
 	}
 }
 
-static void usb_tmon_isoc_in(USBDevice *dev, USBPacket *p)
+static void usb_tmon_bulk_in(USBDevice *dev, USBPacket *p)
+{
+	USBTMonState* state = (USBTMonState *)dev;
+
+	if (state->time_in == 0 || state->transfer_type != TRANSFER_BULK)
+	{
+		state->data_in = 0;
+		state->time_in = get_now_sec();
+		state->transfer_type = TRANSFER_BULK;
+	}
+	else if (state->time_in != get_now_sec())
+	{
+		printf("[BULK][IN] Transferred %ld bytes in the last second.\n", state->data_in);
+		state->data_in = 0;
+		state->time_in = get_now_sec();
+	}
+}
+
+static void usb_tmon_isoc_out(USBDevice *dev, USBPacket *p)
 {
 	/* USBTMonState* state = (USBTMonState *)dev; */
 }
 
-static void usb_tmon_isoc_out(USBDevice *dev, USBPacket *p)
+static void usb_tmon_isoc_in(USBDevice *dev, USBPacket *p)
 {
 	/* USBTMonState* state = (USBTMonState *)dev; */
 }
@@ -202,49 +202,66 @@ static void usb_tmon_handle_data(USBDevice *dev, USBPacket *p)
 
 	switch (p->pid)
 	{
-		case USB_TOKEN_IN:
+		case USB_TOKEN_OUT:
+		{
+			/* uint8_t data = 0; */
+			/* uint32_t count = 1; */
+
 			switch (p->ep->nr)
 			{
-				case 1:
-					usb_tmon_int_in(dev, p);
+				case 2:
+					usb_tmon_int_out(dev, p);
+					/* data = 1; */
+					/* count = INT_PACKET_SIZE; */
 					break;
-				case 3:
-					usb_tmon_bulk_in(dev, p);
+				case 4:
+					usb_tmon_bulk_out(dev, p);
+					/* data = 2; */
+					/* count = BULK_PACKET_SIZE; */
 					break;
-				case 5:
-					usb_tmon_isoc_in(dev, p);
+				case 6:
+					usb_tmon_isoc_out(dev, p);
+					/* data = 3; */
+					/* count = ISOC_PACKET_SIZE; */
 					break;
 			}
+			state->data_out += p->iov.size;
 
-			state->data_in += p->actual_length;
+			/* for (size_t i = 0; i < count; ++i) */
+			/* { */
+			/* 	if ( != data) */
+			/* 		printf("Oops, something went wrong :)\n"); */
+			/* } */
 			break;
-		case USB_TOKEN_OUT:
+		}
+		case USB_TOKEN_IN:
 		{
 			uint8_t data = 0;
 			uint32_t count = 0;
 
 			switch (p->ep->nr)
 			{
-				case 2:
-					usb_tmon_int_out(dev, p);
+				case 1:
+					usb_tmon_int_in(dev, p);
 					data = 1;
 					count = INT_PACKET_SIZE;
 					break;
-				case 4:
-					usb_tmon_bulk_out(dev, p);
+				case 3:
+					usb_tmon_bulk_in(dev, p);
 					data = 2;
 					count = BULK_PACKET_SIZE;
 					break;
-				case 6:
-					usb_tmon_isoc_out(dev, p);
+				case 5:
+					usb_tmon_isoc_in(dev, p);
 					data = 3;
 					count = ISOC_PACKET_SIZE;
 					break;
 			}
 
 			usb_tmon_repl(p, data, count);
+			p->actual_length = count;
 
-			state->data_out += count;
+			state->data_in += count;
 			break;
 		}
 	}
@@ -261,22 +278,6 @@ static const USBDescIface desc_iface_tmon = {
 	.bInterfaceClass = DIAGNOSTIC_DEVICE_CLASS,
 	.bInterfaceSubClass = USB_SUBCLASS_UNDEFINED,
 	.bInterfaceProtocol = 0x01,
-	.ndesc = 1,
-	.descs = (USBDescOther[]) {
-		{ // NO FUCKING IDEA...
-			.data = (uint8_t[]) {
-				0x09,                    /* bLength */
-				USB_DT_INTERFACE,        /* bDescriptorType */
-				0x00,                    /* bInterfaceNumber*/
-				0x00,                    /* bAlternateSetting */
-				0x06,                    /* bNumEndpoints */
-				DIAGNOSTIC_DEVICE_CLASS, /* bInterfaceClass */
-				USB_SUBCLASS_UNDEFINED,  /* bInterfaceSubClass */
-				0x01,                    /* bInterfaceProtocol */
-				0x00                     /* index */
-			},
-		},
-	},
 	.eps = (USBDescEndpoint[]) {
 		{
 			.bEndpointAddress = USB_DIR_IN | 0x01,
