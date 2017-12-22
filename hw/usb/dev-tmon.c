@@ -97,7 +97,6 @@ static uint8_t descriptor[] = {
 static void usb_tmon_handle_control(USBDevice *dev, USBPacket *p,
                int request, int value, int index, int length, uint8_t *data)
 {
-	printf("length = %d | index = %d | value = %d | request = %d\n", length, index, value, request);
 	int rc = usb_desc_handle_control(dev, p, request, value, index, length, data);
 
 	if (rc >= 0)
@@ -127,7 +126,7 @@ static void usb_tmon_int_out(USBDevice *dev, USBPacket *p)
 	else
 	{
 		long now = get_now_usec();
-		printf("[INT][OUT] Packet received after %ld usecs.", (now - state->time_out));
+		printf("[INT][OUT] Packet received after %ld usecs.\n", (now - state->time_out));
 		state->time_out = now;
 	}
 }
@@ -189,11 +188,13 @@ static void usb_tmon_bulk_in(USBDevice *dev, USBPacket *p)
 static void usb_tmon_isoc_out(USBDevice *dev, USBPacket *p)
 {
 	/* USBTMonState* state = (USBTMonState *)dev; */
+	printf("ISOC OUT\n");
 }
 
 static void usb_tmon_isoc_in(USBDevice *dev, USBPacket *p)
 {
 	/* USBTMonState* state = (USBTMonState *)dev; */
+	printf("ISOC IN\n");
 }
 
 static void usb_tmon_handle_data(USBDevice *dev, USBPacket *p)
@@ -259,7 +260,6 @@ static void usb_tmon_handle_data(USBDevice *dev, USBPacket *p)
 			}
 
 			usb_tmon_repl(p, data, count);
-			p->actual_length = count;
 
 			state->data_in += count;
 			break;
