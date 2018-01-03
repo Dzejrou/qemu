@@ -14,6 +14,11 @@
 #define INT_PACKET_SIZE 512
 #define BULK_PACKET_SIZE 512
 #define ISOC_PACKET_SIZE 512
+#define BUFFER_SIZE 512
+
+#define CHECK 0xDEADBEEF
+static uint8_t buffer[BUFFER_SIZE];
+static uint8_t check_buffer[BUFFER_SIZE];
 
 typedef enum
 {
@@ -65,15 +70,6 @@ static const USBDescStrings desc_strings = {
 	[STR_SERIALNUMBER] = "1337",
 	[STR_CONFIG_TMON]  = "Transfer Monitor"
 };
-
-static void usb_tmon_repl(USBPacket *p, uint8_t data, uint32_t count)
-{
-	uint8_t *buf = (uint8_t *)malloc(count);
-	for (uint32_t i = 0; i < count; ++i)
-		buf[i] = data;
-	usb_packet_copy(p, (void *)buf, count);
-	free(buf);
-}
 
 #define U16(x) ((x) & 0xff), (((x) >> 8) & 0xff)
 
@@ -205,62 +201,70 @@ static void usb_tmon_handle_data(USBDevice *dev, USBPacket *p)
 	{
 		case USB_TOKEN_OUT:
 		{
-			/* uint8_t data = 0; */
-			/* uint32_t count = 1; */
-
 			switch (p->ep->nr)
 			{
-				case 2:
+				case 0x2:
+				case 0x8:
 					usb_tmon_int_out(dev, p);
-					/* data = 1; */
-					/* count = INT_PACKET_SIZE; */
 					break;
-				case 4:
+				case 0x4:
+				case 0xA:
 					usb_tmon_bulk_out(dev, p);
-					/* data = 2; */
-					/* count = BULK_PACKET_SIZE; */
 					break;
-				case 6:
+				case 0x6:
+				case 0xC:
 					usb_tmon_isoc_out(dev, p);
-					/* data = 3; */
-					/* count = ISOC_PACKET_SIZE; */
 					break;
+				default:
+					printf("Invalid endpoint number %d\n", (int)p->ep->nr);
+					return;
 			}
 			state->data_out += p->iov.size;
 
-			/* for (size_t i = 0; i < count; ++i) */
-			/* { */
-			/* 	if ( != data) */
-			/* 		printf("Oops, something went wrong :)\n"); */
-			/* } */
+			if (p->ep->nr == 0x8 || p->ep->nr == 0xA || p->ep->nr == 0xC)
+			{
+				for (size_t i = 0; i < p->iov.niov; ++i)
+				{
+					uint32_t *buf = (uint32_t *)p->iov.iov[i].iov_base;
+					for (size_t j = 0; j < p->iov.iov[i].iov_len / sizeof(CHECK); ++j)
+					{
+						if (buf[j] != CHECK)
+							printf("Oops, something went wrong :) [0x%X != 0xDEADBEEF]\n", buf[j]);
+					}
+				}
+			}
 			break;
 		}
 		case USB_TOKEN_IN:
 		{
-			uint8_t data = 0;
 			uint32_t count = 0;
 
 			switch (p->ep->nr)
 			{
-				case 1:
+				case 0x1:
+				case 0x7:
 					usb_tmon_int_in(dev, p);
-					data = 1;
 					count = INT_PACKET_SIZE;
 					break;
-				case 3:
+				case 0x3:
+				case 0x9:
 					usb_tmon_bulk_in(dev, p);
-					data = 2;
 					count = BULK_PACKET_SIZE;
 					break;
-				case 5:
+				case 0x5:
+				case 0xB:
 					usb_tmon_isoc_in(dev, p);
-					data = 3;
 					count = ISOC_PACKET_SIZE;
 					break;
+				default:
+					printf("Invalid endpoint number %d\n", (int)p->ep->nr);
+					return;
 			}
 
-			usb_tmon_repl(p, data, count);
-
+			if (p->ep->nr == 0x7 || p->ep->nr == 0x9 || p->ep->nr == 0xB)
+				usb_packet_copy(p, (void *)buffer, count);
+			else
+				p->actual_length += count;
 			state->data_in += count;
 			break;
 		}
@@ -274,7 +278,7 @@ static void usb_tmon_handle_reset(USBDevice *dev)
 
 static const USBDescIface desc_iface_tmon = {
 	.bInterfaceNumber = 0,
-	.bNumEndpoints = 6,
+	.bNumEndpoints = 12,
 	.bInterfaceClass = DIAGNOSTIC_DEVICE_CLASS,
 	.bInterfaceSubClass = USB_SUBCLASS_UNDEFINED,
 	.bInterfaceProtocol = 0x01,
@@ -311,25 +315,40 @@ static const USBDescIface desc_iface_tmon = {
 			.bmAttributes = USB_ENDPOINT_XFER_ISOC,
 			.wMaxPacketSize = ISOC_PACKET_SIZE,
 		},
+		{
+			.bEndpointAddress = USB_DIR_IN | 0x07,
+			.bmAttributes = USB_ENDPOINT_XFER_INT,
+			.wMaxPacketSize = INT_PACKET_SIZE,
+			.bInterval = 7,
+		},
+		{
+			.bEndpointAddress = USB_DIR_OUT | 0x08,
+			.bmAttributes = USB_ENDPOINT_XFER_INT,
+			.wMaxPacketSize = INT_PACKET_SIZE,
+			.bInterval = 7,
+		},
+		{
+			.bEndpointAddress = USB_DIR_IN | 0x09,
+			.bmAttributes = USB_ENDPOINT_XFER_BULK,
+			.wMaxPacketSize = BULK_PACKET_SIZE,
+		},
+		{
+			.bEndpointAddress = USB_DIR_OUT | 0x0A,
+			.bmAttributes = USB_ENDPOINT_XFER_BULK,
+			.wMaxPacketSize = BULK_PACKET_SIZE,
+		},
+		{
+			.bEndpointAddress = USB_DIR_IN | 0x0B,
+			.bmAttributes = USB_ENDPOINT_XFER_ISOC,
+			.wMaxPacketSize = ISOC_PACKET_SIZE,
+		},
+		{
+			.bEndpointAddress = USB_DIR_OUT | 0x0C,
+			.bmAttributes = USB_ENDPOINT_XFER_ISOC,
+			.wMaxPacketSize = ISOC_PACKET_SIZE,
+		},
 	},
 };
-
-/* static uint8_t bla[] = {*/
-/* 	0x12,                     bLength */
-/* 	0x01,                     bDescriptorType */
-/* 	U16(0x0300),              bcdUSB */
-/* 	DIAGNOSTIC_DEVICE_CLASS,  bDeviceClass */
-/* 	0x00,                     bDeviceSubClass */
-/* 	0x00,                     bDeviceProtocol */
-/* 	0x09,                     bMaxPacketSize */
-/* 	U16(0x1337),              idVendor */
-/* 	U16(0x1337),              idProduct */
-/* 	U16(0x1337),              bcdDevice*/
-/* 	0x01,                     iManufacturer */
-/* 	0x02,                     iProduct */
-/* 	0x03,                     iSerialNumber */
-/* 	0x01                      bNumConfigurations */
-/* };*/
 
 static const USBDescDevice desc_device_tmon = {
     .bcdUSB                        = 0x0300,
@@ -366,7 +385,6 @@ static const USBDesc desc_tmon = {
 
 static void usb_tmon_realize(USBDevice *dev, Error **errp)
 {
-	printf("TMON REALIZING!\n");
 	dev->usb_desc = &desc_tmon;
 	dev->device = desc_tmon.super;
 	dev->speedmask = USB_SPEED_MASK_SUPER
@@ -382,7 +400,7 @@ static void usb_tmon_realize(USBDevice *dev, Error **errp)
 
 static void usb_tmon_handle_attach(USBDevice *dev)
 {
-	printf("TMON ATTACHED\n");
+	printf("USB Transfer Monitor attached.\n");
 }
 
 static const VMStateDescription vmstate_usb_tmon = {
@@ -415,6 +433,9 @@ static void usb_tmon_class_init(ObjectClass *klass, void *data)
 
 	set_bit(DEVICE_CATEGORY_USB, dc->categories);
 	dc->vmsd = &vmstate_usb_tmon;
+
+	memset(buffer, CHECK, BUFFER_SIZE / sizeof(CHECK));
+	memset(check_buffer, 42, BUFFER_SIZE);
 }
 
 static const TypeInfo usb_tmon_info = {
