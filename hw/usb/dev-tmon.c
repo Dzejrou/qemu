@@ -20,6 +20,9 @@
 static uint8_t buffer[BUFFER_SIZE];
 static uint8_t check_buffer[BUFFER_SIZE];
 
+#define INT_INTERVAL 7
+#define ISOC_INTERVAL 7
+
 typedef enum
 {
 	TRANSFER_CONTROL,
@@ -287,13 +290,13 @@ static const USBDescIface desc_iface_tmon = {
 			.bEndpointAddress = USB_DIR_IN | 0x01,
 			.bmAttributes = USB_ENDPOINT_XFER_INT,
 			.wMaxPacketSize = INT_PACKET_SIZE,
-			.bInterval = 7,
+			.bInterval = INT_INTERVAL,
 		},
 		{
 			.bEndpointAddress = USB_DIR_OUT | 0x02,
 			.bmAttributes = USB_ENDPOINT_XFER_INT,
 			.wMaxPacketSize = INT_PACKET_SIZE,
-			.bInterval = 7,
+			.bInterval = INT_INTERVAL,
 		},
 		{
 			.bEndpointAddress = USB_DIR_IN | 0x03,
@@ -309,23 +312,25 @@ static const USBDescIface desc_iface_tmon = {
 			.bEndpointAddress = USB_DIR_IN | 0x05,
 			.bmAttributes = USB_ENDPOINT_XFER_ISOC,
 			.wMaxPacketSize = ISOC_PACKET_SIZE,
+			.bInterval = ISOC_INTERVAL,
 		},
 		{
 			.bEndpointAddress = USB_DIR_OUT | 0x06,
 			.bmAttributes = USB_ENDPOINT_XFER_ISOC,
 			.wMaxPacketSize = ISOC_PACKET_SIZE,
+			.bInterval = ISOC_INTERVAL,
 		},
 		{
 			.bEndpointAddress = USB_DIR_IN | 0x07,
 			.bmAttributes = USB_ENDPOINT_XFER_INT,
 			.wMaxPacketSize = INT_PACKET_SIZE,
-			.bInterval = 7,
+			.bInterval = INT_INTERVAL,
 		},
 		{
 			.bEndpointAddress = USB_DIR_OUT | 0x08,
 			.bmAttributes = USB_ENDPOINT_XFER_INT,
 			.wMaxPacketSize = INT_PACKET_SIZE,
-			.bInterval = 7,
+			.bInterval = INT_INTERVAL,
 		},
 		{
 			.bEndpointAddress = USB_DIR_IN | 0x09,
@@ -341,11 +346,13 @@ static const USBDescIface desc_iface_tmon = {
 			.bEndpointAddress = USB_DIR_IN | 0x0B,
 			.bmAttributes = USB_ENDPOINT_XFER_ISOC,
 			.wMaxPacketSize = ISOC_PACKET_SIZE,
+			.bInterval = ISOC_INTERVAL,
 		},
 		{
 			.bEndpointAddress = USB_DIR_OUT | 0x0C,
 			.bmAttributes = USB_ENDPOINT_XFER_ISOC,
 			.wMaxPacketSize = ISOC_PACKET_SIZE,
+			.bInterval = ISOC_INTERVAL,
 		},
 	},
 };
