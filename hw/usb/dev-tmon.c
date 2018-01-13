@@ -90,40 +90,10 @@ static const USBDescStrings desc_strings = {
 
 #define U16(x) ((x) & 0xff), (((x) >> 8) & 0xff)
 
-static uint8_t descriptor[] = {
-	0x12,                    /* bLength */
-	0x01,                    /* bDescriptorType */
-	U16(0x0300),             /* bcdUSB */
-	DIAGNOSTIC_DEVICE_CLASS, /* bDeviceClass */
-	0x00,                    /* bDeviceSubClass */
-	0x00,                    /* bDeviceProtocol */
-	0x09,                    /* bMaxPacketSize */
-	U16(0x1337),             /* idVendor */
-	U16(0x1337),             /* idProduct */
-	U16(0x1337),             /* bcdDevice*/
-	0x01,                    /* iManufacturer */
-	0x02,                    /* iProduct */
-	0x03,                    /* iSerialNumber */
-	0x01                     /* bNumConfigurations */
-};
-
 static void usb_tmon_handle_control(USBDevice *dev, USBPacket *p,
                int request, int value, int index, int length, uint8_t *data)
 {
-	int rc = usb_desc_handle_control(dev, p, request, value, index, length, data);
-
-	if (rc >= 0)
-		return;
-	return;
-
-	if (request == 32774 && value == 256 && length == 18)
-	{
-		printf("Got descriptor request!\n");
-		memcpy(data, descriptor, sizeof(descriptor));
-		p->actual_length = sizeof(descriptor);
-	}
-	else
-		usb_desc_handle_control(dev, p, request, value, index, length, data);
+	usb_desc_handle_control(dev, p, request, value, index, length, data);
 }
 
 static void usb_tmon_int_out(USBDevice *dev, USBPacket *p)
