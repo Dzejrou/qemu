@@ -23,6 +23,20 @@ static uint8_t check_buffer[BUFFER_SIZE];
 #define INT_INTERVAL 7
 #define ISOC_INTERVAL 7
 
+#define EP_INT_IN   0x1
+#define EP_INT_OUT  0x2
+#define EP_BULK_IN  0x3
+#define EP_BULK_OUT 0x4
+#define EP_ISOC_IN  0x5
+#define EP_ISOC_OUT 0x6
+
+#define CHECK_EP_INT_IN   0x7
+#define CHECK_EP_INT_OUT  0x8
+#define CHECK_EP_BULK_IN  0x9
+#define CHECK_EP_BULK_OUT 0xA
+#define CHECK_EP_ISOC_IN  0xB
+#define CHECK_EP_ISOC_OUT 0xC
+
 typedef enum
 {
 	TRANSFER_CONTROL,
@@ -206,16 +220,16 @@ static void usb_tmon_handle_data(USBDevice *dev, USBPacket *p)
 		{
 			switch (p->ep->nr)
 			{
-				case 0x2:
-				case 0x8:
+				case EP_INT_OUT:
+				case CHECK_EP_INT_OUT:
 					usb_tmon_int_out(dev, p);
 					break;
-				case 0x4:
-				case 0xA:
+				case EP_BULK_OUT:
+				case CHECK_EP_BULK_OUT:
 					usb_tmon_bulk_out(dev, p);
 					break;
-				case 0x6:
-				case 0xC:
+				case EP_ISOC_OUT:
+				case CHECK_EP_ISOC_OUT:
 					usb_tmon_isoc_out(dev, p);
 					break;
 				default:
@@ -244,18 +258,18 @@ static void usb_tmon_handle_data(USBDevice *dev, USBPacket *p)
 
 			switch (p->ep->nr)
 			{
-				case 0x1:
-				case 0x7:
+				case EP_INT_IN:
+				case CHECK_EP_INT_IN:
 					usb_tmon_int_in(dev, p);
 					count = INT_PACKET_SIZE;
 					break;
-				case 0x3:
-				case 0x9:
+				case EP_BULK_IN:
+				case CHECK_EP_BULK_IN:
 					usb_tmon_bulk_in(dev, p);
 					count = BULK_PACKET_SIZE;
 					break;
-				case 0x5:
-				case 0xB:
+				case EP_ISOC_IN:
+				case CHECK_EP_ISOC_IN:
 					usb_tmon_isoc_in(dev, p);
 					count = ISOC_PACKET_SIZE;
 					break;
@@ -287,69 +301,69 @@ static const USBDescIface desc_iface_tmon = {
 	.bInterfaceProtocol = 0x01,
 	.eps = (USBDescEndpoint[]) {
 		{
-			.bEndpointAddress = USB_DIR_IN | 0x01,
+			.bEndpointAddress = USB_DIR_IN | EP_INT_IN,
 			.bmAttributes = USB_ENDPOINT_XFER_INT,
 			.wMaxPacketSize = INT_PACKET_SIZE,
 			.bInterval = INT_INTERVAL,
 		},
 		{
-			.bEndpointAddress = USB_DIR_OUT | 0x02,
+			.bEndpointAddress = USB_DIR_OUT | EP_INT_OUT,
 			.bmAttributes = USB_ENDPOINT_XFER_INT,
 			.wMaxPacketSize = INT_PACKET_SIZE,
 			.bInterval = INT_INTERVAL,
 		},
 		{
-			.bEndpointAddress = USB_DIR_IN | 0x03,
+			.bEndpointAddress = USB_DIR_IN | EP_BULK_IN,
 			.bmAttributes = USB_ENDPOINT_XFER_BULK,
 			.wMaxPacketSize = BULK_PACKET_SIZE,
 		},
 		{
-			.bEndpointAddress = USB_DIR_OUT | 0x04,
+			.bEndpointAddress = USB_DIR_OUT | EP_BULK_OUT,
 			.bmAttributes = USB_ENDPOINT_XFER_BULK,
 			.wMaxPacketSize = BULK_PACKET_SIZE,
 		},
 		{
-			.bEndpointAddress = USB_DIR_IN | 0x05,
+			.bEndpointAddress = USB_DIR_IN | EP_ISOC_IN,
 			.bmAttributes = USB_ENDPOINT_XFER_ISOC,
 			.wMaxPacketSize = ISOC_PACKET_SIZE,
 			.bInterval = ISOC_INTERVAL,
 		},
 		{
-			.bEndpointAddress = USB_DIR_OUT | 0x06,
+			.bEndpointAddress = USB_DIR_OUT | EP_ISOC_OUT,
 			.bmAttributes = USB_ENDPOINT_XFER_ISOC,
 			.wMaxPacketSize = ISOC_PACKET_SIZE,
 			.bInterval = ISOC_INTERVAL,
 		},
 		{
-			.bEndpointAddress = USB_DIR_IN | 0x07,
+			.bEndpointAddress = USB_DIR_IN | CHECK_EP_INT_IN,
 			.bmAttributes = USB_ENDPOINT_XFER_INT,
 			.wMaxPacketSize = INT_PACKET_SIZE,
 			.bInterval = INT_INTERVAL,
 		},
 		{
-			.bEndpointAddress = USB_DIR_OUT | 0x08,
+			.bEndpointAddress = USB_DIR_OUT | CHECK_EP_INT_OUT,
 			.bmAttributes = USB_ENDPOINT_XFER_INT,
 			.wMaxPacketSize = INT_PACKET_SIZE,
 			.bInterval = INT_INTERVAL,
 		},
 		{
-			.bEndpointAddress = USB_DIR_IN | 0x09,
+			.bEndpointAddress = USB_DIR_IN | CHECK_EP_BULK_IN,
 			.bmAttributes = USB_ENDPOINT_XFER_BULK,
 			.wMaxPacketSize = BULK_PACKET_SIZE,
 		},
 		{
-			.bEndpointAddress = USB_DIR_OUT | 0x0A,
+			.bEndpointAddress = USB_DIR_OUT | CHECK_EP_BULK_OUT,
 			.bmAttributes = USB_ENDPOINT_XFER_BULK,
 			.wMaxPacketSize = BULK_PACKET_SIZE,
 		},
 		{
-			.bEndpointAddress = USB_DIR_IN | 0x0B,
+			.bEndpointAddress = USB_DIR_IN | CHECK_EP_ISOC_IN,
 			.bmAttributes = USB_ENDPOINT_XFER_ISOC,
 			.wMaxPacketSize = ISOC_PACKET_SIZE,
 			.bInterval = ISOC_INTERVAL,
 		},
 		{
-			.bEndpointAddress = USB_DIR_OUT | 0x0C,
+			.bEndpointAddress = USB_DIR_OUT | CHECK_EP_ISOC_OUT,
 			.bmAttributes = USB_ENDPOINT_XFER_ISOC,
 			.wMaxPacketSize = ISOC_PACKET_SIZE,
 			.bInterval = ISOC_INTERVAL,
