@@ -24,18 +24,18 @@ static uint8_t check_buffer[BUFFER_SIZE];
 #define ISOC_INTERVAL 7
 
 #define EP_INT_IN   0x1
-#define EP_INT_OUT  0x2
-#define EP_BULK_IN  0x3
-#define EP_BULK_OUT 0x4
-#define EP_ISOC_IN  0x5
-#define EP_ISOC_OUT 0x6
+#define EP_INT_OUT  0x1
+#define EP_BULK_IN  0x2
+#define EP_BULK_OUT 0x2
+#define EP_ISOC_IN  0x3
+#define EP_ISOC_OUT 0x3
 
-#define CHECK_EP_INT_IN   0x7
-#define CHECK_EP_INT_OUT  0x8
-#define CHECK_EP_BULK_IN  0x9
-#define CHECK_EP_BULK_OUT 0xA
-#define CHECK_EP_ISOC_IN  0xB
-#define CHECK_EP_ISOC_OUT 0xC
+#define CHECK_EP_INT_IN   0x5
+#define CHECK_EP_INT_OUT  0x5
+#define CHECK_EP_BULK_IN  0x6
+#define CHECK_EP_BULK_OUT 0x6
+#define CHECK_EP_ISOC_IN  0x7
+#define CHECK_EP_ISOC_OUT 0x7
 
 typedef enum
 {
