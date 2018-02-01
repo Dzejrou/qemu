@@ -16,9 +16,9 @@
 #define ISOC_PACKET_SIZE 64
 #define BUFFER_SIZE 512
 
+#define CHECK_SIZE 4
 #define CHECK 0xDEADBEEF
 static uint8_t buffer[BUFFER_SIZE];
-static uint8_t check_buffer[BUFFER_SIZE];
 
 #define INT_INTERVAL 7
 #define ISOC_INTERVAL 7
@@ -109,7 +109,7 @@ static void usb_tmon_int_out(USBDevice *dev, USBPacket *p)
 	else
 	{
 		long now = get_now_usec();
-		printf("[INT][OUT] Packet received after %ld usecs.\n", (now - state->time_out));
+		printf("[INTR][OUT] Packet received after %ld usecs.\n", (now - state->time_out));
 		state->time_out = now;
 	}
 }
@@ -127,7 +127,7 @@ static void usb_tmon_int_in(USBDevice *dev, USBPacket *p)
 	else
 	{
 		long now = get_now_usec();
-		printf("[INT][IN] Packet received after %ld usecs.\n", (now - state->time_in));
+		printf("[INTR][IN] Packet received after %ld usecs.\n", (now - state->time_in));
 		state->time_in = now;
 	}
 }
@@ -171,13 +171,13 @@ static void usb_tmon_bulk_in(USBDevice *dev, USBPacket *p)
 static void usb_tmon_isoc_out(USBDevice *dev, USBPacket *p)
 {
 	/* USBTMonState* state = (USBTMonState *)dev; */
-	printf("ISOC OUT\n");
+	printf("[ISOC][OUT]\n");
 }
 
 static void usb_tmon_isoc_in(USBDevice *dev, USBPacket *p)
 {
 	/* USBTMonState* state = (USBTMonState *)dev; */
-	printf("ISOC IN\n");
+	printf("[ISOC][IN]\n");
 }
 
 static void usb_tmon_handle_data(USBDevice *dev, USBPacket *p)
@@ -208,12 +208,14 @@ static void usb_tmon_handle_data(USBDevice *dev, USBPacket *p)
 			}
 			state->data_out += p->iov.size;
 
-			if (p->ep->nr == 0x8 || p->ep->nr == 0xA || p->ep->nr == 0xC)
+			if (p->ep->nr == CHECK_EP_INT_OUT
+				|| p->ep->nr == CHECK_EP_BULK_OUT
+				|| p->ep->nr == CHECK_EP_ISOC_OUT)
 			{
 				for (size_t i = 0; i < p->iov.niov; ++i)
 				{
 					uint32_t *buf = (uint32_t *)p->iov.iov[i].iov_base;
-					for (size_t j = 0; j < p->iov.iov[i].iov_len / sizeof(CHECK); ++j)
+					for (size_t j = 0; j < p->iov.iov[i].iov_len / CHECK_SIZE; ++j)
 					{
 						if (buf[j] != CHECK)
 							printf("Oops, something went wrong :) [0x%X != 0xDEADBEEF]\n", buf[j]);
@@ -248,8 +250,10 @@ static void usb_tmon_handle_data(USBDevice *dev, USBPacket *p)
 					return;
 			}
 
-			if (p->ep->nr == 0x7 || p->ep->nr == 0x9 || p->ep->nr == 0xB)
-				usb_packet_copy(p, (void *)buffer, count);
+			if (p->ep->nr == CHECK_EP_INT_IN
+				|| p->ep->nr == CHECK_EP_BULK_IN
+				|| p->ep->nr == CHECK_EP_ISOC_IN)
+					usb_packet_copy(p, (void *)buffer, count);
 			else
 				p->actual_length += count;
 			state->data_in += count;
@@ -425,8 +429,10 @@ static void usb_tmon_class_init(ObjectClass *klass, void *data)
 	set_bit(DEVICE_CATEGORY_USB, dc->categories);
 	dc->vmsd = &vmstate_usb_tmon;
 
-	memset(buffer, CHECK, BUFFER_SIZE / sizeof(CHECK));
-	memset(check_buffer, 42, BUFFER_SIZE);
+	static const uint32_t test_data = CHECK;
+	for (size_t i = 0; i < BUFFER_SIZE; i += sizeof(test_data)) {
+		memcpy(buffer + i, &test_data, sizeof(test_data));
+	}
 }
 
 static const TypeInfo usb_tmon_info = {
