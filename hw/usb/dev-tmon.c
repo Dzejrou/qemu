@@ -14,10 +14,12 @@
 #define INT_PACKET_SIZE 8
 #define BULK_PACKET_SIZE 1024
 #define ISOC_PACKET_SIZE 64
-#define BUFFER_SIZE 512
 
 #define CHECK_SIZE 4
 #define CHECK 0xDEADBEEF
+
+/* Prepared buffer for faster copying */
+#define BUFFER_SIZE 4096
 static uint8_t buffer[BUFFER_SIZE];
 
 #define INT_INTERVAL 7
@@ -206,7 +208,7 @@ static void usb_tmon_handle_data(USBDevice *dev, USBPacket *p)
 					printf("Invalid endpoint number %d\n", (int)p->ep->nr);
 					return;
 			}
-			state->data_out += p->iov.size;
+			state->data_out += usb_packet_size(p);
 
 			if (p->ep->nr == CHECK_EP_INT_OUT
 				|| p->ep->nr == CHECK_EP_BULK_OUT
@@ -226,37 +228,40 @@ static void usb_tmon_handle_data(USBDevice *dev, USBPacket *p)
 		}
 		case USB_TOKEN_IN:
 		{
-			uint32_t count = 0;
-
 			switch (p->ep->nr)
 			{
 				case EP_INT_IN:
 				case CHECK_EP_INT_IN:
 					usb_tmon_int_in(dev, p);
-					count = INT_PACKET_SIZE;
 					break;
 				case EP_BULK_IN:
 				case CHECK_EP_BULK_IN:
 					usb_tmon_bulk_in(dev, p);
-					count = BULK_PACKET_SIZE;
 					break;
 				case EP_ISOC_IN:
 				case CHECK_EP_ISOC_IN:
 					usb_tmon_isoc_in(dev, p);
-					count = ISOC_PACKET_SIZE;
 					break;
 				default:
 					printf("Invalid endpoint number %d\n", (int)p->ep->nr);
 					return;
 			}
 
+			size_t remaining = usb_packet_size(p);
+			state->data_in += remaining;
+
 			if (p->ep->nr == CHECK_EP_INT_IN
 				|| p->ep->nr == CHECK_EP_BULK_IN
 				|| p->ep->nr == CHECK_EP_ISOC_IN)
-					usb_packet_copy(p, (void *)buffer, count);
-			else
-				p->actual_length += count;
-			state->data_in += count;
+				while (remaining > 0) {
+					size_t s = MIN(remaining, BUFFER_SIZE);
+					usb_packet_copy(p, (void *)buffer, s);
+					remaining -= s;
+				}
+
+			// We shall call usb_packet_skip, but that would memset skipped
+			// bytes to zero.
+			p->actual_length += remaining;
 			break;
 		}
 	}
